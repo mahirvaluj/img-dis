@@ -1,9 +1,12 @@
 (defpackage :spack
   (:use :cl)
   (:export :spack-elem :spack :elements :val :elem-type
-           :spush :out :parse :make-and-push :destructuring-elements))
+   :spush :out :parse :make-and-push :destructuring-elements
+   :*testing*))
 
 (in-package :spack)
+
+(defvar *testing*)
 
 (defclass spack-elem ()
   ((elem-type;; :integer, :float32, :float64, :byte, :string, (:array type), '(type1 type2 type3)
@@ -105,56 +108,58 @@ Pass this function tuples for val and type (make-and-push (val :type) (val :type
   (let ((typebuf (make-array 256 :fill-pointer 0 :element-type '(unsigned-byte 8) :adjustable t))
         (elembuf (make-array 256 :fill-pointer 0 :element-type '(unsigned-byte 8) :adjustable t)))
     (loop for elem across (elements packet)
-       do
-         (cond
-           ((eq (elem-type elem) :integer)
-            (progn
-              (vector-push-extend #x01 typebuf)
-              (vector-push-buf-extend (leb128:encode-signed (val elem))
-                                      elembuf)))
-           ((eq (elem-type elem) :float32)
-            (progn
-              (vector-push-extend #x02 typebuf)
-              (vector-push-buf-extend (cl-intbytes:int32->octets (ieee-floats:encode-float32 (val elem)))
-                                      elembuf)))
-           ((eq (elem-type elem) :float64)
-            (progn
-              (vector-push-extend #x03 typebuf)
-              (vector-push-buf-extend (cl-intbytes:int64->octets (ieee-floats:encode-float64 (val elem)))
-                                      elembuf)))
-           ((eq (elem-type elem) :byte)
-            (progn
-              (vector-push-extend #x04 typebuf)
-              (vector-push-extend (val elem) elembuf)))
-           ((eq (elem-type elem) :string)
-            (progn
-              (vector-push-extend #x05 typebuf)
-              (vector-push-buf-extend (leb128:encode-signed (length (val elem)))
-                                      typebuf)
-              (vector-push-buf-extend (trivial-utf-8:string-to-utf-8-bytes (val elem))
-                                      elembuf)))
-           ((and (consp (elem-type elem)) (eq (car (elem-type elem)) :array))
-            (let ((atype (case (cadr (elem-type elem))
-                           (:integer #x01) (:float32 #x02)
-                           (:float64 #x03) (:byte #x04) (t (error "Bad type in array")))))
-              (vector-push-extend #x10 typebuf)
-              (vector-push-extend atype typebuf)
-              (vector-push-buf-extend (leb128:encode-signed (length (val elem))) typebuf)
-              (cond ((= atype #x1)
-                     (loop for ai across (val elem) do (vector-push-buf-extend (leb128:encode-signed ai) elembuf)))
-                    ((= atype #x2)
-                     (loop for ai across (val elem) do (vector-push-buf-extend (cl-intbytes:int32->octets (ieee-floats:encode-float32 ai)) elembuf)))
-                    ((= atype #x3)
-                     (loop for ai across (val elem) do (vector-push-buf-extend (cl-intbytes:int64->octets (ieee-floats:encode-float64 ai)) elembuf)))
-                    ((= atype #x4)
-                     (loop for ai across (val elem) do (vector-push-extend ai elembuf))))))
-           (t (error (format nil "bad type ~A passed to out" (elem-type elem))))))
+          do
+             (cond
+               ((eq (elem-type elem) :integer)
+                (progn
+                  (vector-push-extend #x01 typebuf)
+                  (vector-push-buf-extend (leb128:encode-signed (val elem))
+                                          elembuf)))
+               ((eq (elem-type elem) :float32)
+                (progn
+                  (vector-push-extend #x02 typebuf)
+                  (vector-push-buf-extend (cl-intbytes:int32->octets (ieee-floats:encode-float32 (val elem)))
+                                          elembuf)))
+               ((eq (elem-type elem) :float64)
+                (progn
+                  (vector-push-extend #x03 typebuf)
+                  (vector-push-buf-extend (cl-intbytes:int64->octets (ieee-floats:encode-float64 (val elem)))
+                                          elembuf)))
+               ((eq (elem-type elem) :byte)
+                (progn
+                  (vector-push-extend #x04 typebuf)
+                  (vector-push-extend (val elem) elembuf)))
+               ((eq (elem-type elem) :string)
+                (progn
+                  (vector-push-extend #x05 typebuf)
+                  (vector-push-buf-extend (leb128:encode-signed (length (val elem)))
+                                          typebuf)
+                  (vector-push-buf-extend (trivial-utf-8:string-to-utf-8-bytes (val elem))
+                                          elembuf)))
+               ((and (consp (elem-type elem)) (eq (car (elem-type elem)) :array))
+                (let ((atype (case (cadr (elem-type elem))
+                               (:integer #x01) (:float32 #x02)
+                               (:float64 #x03) (:byte #x04) (t (error "Bad type in array")))))
+                  (vector-push-extend #x10 typebuf)
+                  (vector-push-extend atype typebuf)
+                  (vector-push-buf-extend (leb128:encode-signed (length (val elem))) typebuf)
+                  (cond ((= atype #x1)
+                         (loop for ai across (val elem) do (vector-push-buf-extend (leb128:encode-signed ai) elembuf)))
+                        ((= atype #x2)
+                         (loop for ai across (val elem) do (vector-push-buf-extend (cl-intbytes:int32->octets (ieee-floats:encode-float32 ai)) elembuf)))
+                        ((= atype #x3)
+                         (loop for ai across (val elem) do (vector-push-buf-extend (cl-intbytes:int64->octets (ieee-floats:encode-float64 ai)) elembuf)))
+                        ((= atype #x4)
+                         (loop for ai across (val elem) do (vector-push-extend ai elembuf))))))
+               (t (error (format nil "bad type ~A passed to out" (elem-type elem))))))
     ;; NOTE: This is badly done, but ironclad doesn't support non-simple vectors??
-    (let ((buf (concatenate '(vector (unsigned-byte 8))
-                            (leb128:encode-signed (length typebuf))
-                            (leb128:encode-signed (length elembuf))
-                            typebuf
-                            elembuf)))
+    (let* ((ltypebuf (leb128:encode-signed (length typebuf)))
+           (lelembuf (leb128:encode-signed (length elembuf)))
+           (buf (concatenate '(vector (unsigned-byte 8))
+                             ltypebuf
+                             lelembuf
+                             typebuf
+                             elembuf)))
       (concatenate '(vector (unsigned-byte 8))
                    (ironclad:digest-sequence :sha256 buf)
                    buf))))
@@ -205,6 +210,7 @@ things. A value, and an integer"
 
 (defmethod parse ((buf array))
   (unless (verify-sha-integrity buf)
+    (setf *testing* buf)
     (error "data corruption has occured. Hash digest does not check
     out."))
   (let ((spack (make-instance 'spack)) (i 32) (types-size) (vals-size) (vi) (types-start))

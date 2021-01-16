@@ -5,11 +5,10 @@
 (defvar *num-hash-slots* 6961) ;; large-ish-prime, I don't think
                                ;; you'll end up having more than 6961
                                ;; drones in the cluster
-(defvar *connection-threads* nil)
-(defvar *server*)
 (defvar *state*)
-(defvar *q*)
 
+
+(defvar *testing*)
 ;; (defclass queue ()
 ;;   ((ql :initform nil :accessor ql)
 ;;    (tail :initform nil :accessor tail)))
@@ -29,44 +28,54 @@
 ;;           (setf (tail q) nil))
 ;;         ret)))
 
-(stmx:transactional
-    (defclass drone ()
-      ((active :initarg :active :accessor active)
-       (assignments :initarg :assignments :accessor assignments)
-       (socket :initarg :socket :accessor socket))))
+(defclass drone ()
+  ((active :initarg :active :accessor active)
+   (assignments :initarg :assignments :accessor assignments)
+   (sock :initarg :sock :accessor sock)))
 
-(stmx:transactional
-    (defclass state ()
-      ((drones :initform (make-array 8 :fill-pointer 0 :adjustable t) :accessor peers)
-       (assignments :initform (make-hash-table) :accessor assignments))))
+(defclass state ()
+  ((drones :initform (make-array 8 :fill-pointer 0 :adjustable t) :accessor drones)
+   (assignments :initform (make-hash-table) :accessor assignments)))
+
+(defun init ()
+  (setf *state* (make-instance 'state)))
 
 (defun connect-drone (host port)
   (let ((drone (make-instance 'drone
                               :active t
                               :assignments nil
-                              :socket (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
+                              :sock (usocket:socket-connect host port :element-type '(unsigned-byte 8)))))
     (loop for i across (spack:out (spack:make-and-push ("hey" :string)))
-          do (write-byte i (usocket:socket-stream (socket drone))))
-    (if (usocket:wait-for-input (usocket:socket-stream (socket drone)) :ready-only t)
-        (string= "hey" (spack:val (car (spack:elements (spack:parse (usocket:socket-stream (socket drone)))))))
+          do (write-byte i (usocket:socket-stream (sock drone))))
+    (force-output (usocket:socket-stream (sock drone)))
+    (if (usocket:wait-for-input (sock drone) :ready-only t)
+        (if (string= "hey" (spack:val (aref (spack:elements (spack:parse (usocket:socket-stream (sock drone)))) 0)))
+            (vector-push-extend drone (drones *state*)))
         nil)))
 
 ;; returns the drone that the assignment was added to
 (defun add-assignment (state slot)
   (let ((min nil))
-    (stmx:atomic
-     (loop for i across (drones state) do
-       (when (or (null min)
-                 (> (length (assignments min)) (length (assignments i))))
-         (setf min i)))
-     (push slot (assignments min))
-     (setf (gethash slot (assignments state)) min))))
+    (loop for i across (drones state) do
+      (when (or (null min)
+                (> (length (assignments min)) (length (assignments i))))
+        (setf min i)))
+    (push slot (assignments min))
+    (setf (gethash slot (assignments state)) min)))
 
 (defun hash-to-int (hash)
   (let ((acc 0))
     (loop for i from 0 below (length hash) do
       (setf acc (logior acc (ash (aref hash i) (* i 8)))))
     acc))
+
+
+(defun put-img (filespec)
+  (with-open-file (s filespec :element-type '(unsigned-byte 8))
+    (let ((buf (make-array (file-length s) :element-type '(unsigned-byte 8))))
+      (loop for i from 0 below (length buf) do
+        (setf (aref buf i) (read-byte s)))
+      (put buf))))
 
 ;; returns hash of data to get it back
 (defun put (buf &optional (state *state*))
@@ -76,14 +85,19 @@
     (unless (nth-value 1 (gethash slot (assignments state)))
       (setf drone (add-assignment state slot)))
     ;; after assigning the slot to a drone
-    (loop for i across (spack:out (spack:make-and-push ("put" :string)
-                                                       (hash :byte-array)
-                                                       (buf :byte-array)))
-          do (write-byte i (usocket:socket-stream (socket drone))))
-    (force-output (usocket:socket-stream (socket drone)))
-    (if (usocket:wait-for-input (usocket:socket-stream (socket drone)) :ready-only t)
-        (spack:destructuring-elements (status) (spack:parse (usocket:socket-stream (socket drone)))
-          (string= status "done"))
+    (let ((o (spack:out (spack:make-and-push ("put" :string)
+                                             (hash :byte-array)
+                                             (buf :byte-array)))))
+      (format *debug-io* "len: ~A~%" (length o))
+      (setf *testing* o)
+      (loop for i across o
+            do (write-byte i (usocket:socket-stream (sock drone)))))
+    (force-output (usocket:socket-stream (sock drone)))
+    (if (usocket:wait-for-input (sock drone) :ready-only t)
+        (spack:destructuring-elements (status) (spack:parse (usocket:socket-stream (sock drone)))
+          (if (string= status "done-put")
+              hash
+              nil))
         nil)))
 
 ;; returns a stream of the data or nil on failure
@@ -94,11 +108,11 @@
       (return-from take nil))
     (loop for i across (spack:out (spack:make-and-push ("get" :string)
                                                        (hash :byte-array)))
-          do (write-byte i (usocket:socket-stream (socket drone))))
-    (force-output (usocket:socket-stream (socket drone)))
-    (if (usocket:wait-for-input (usocket:socket-stream (socket drone)) :ready-only t)
-        (spack:destructuring-elements (status buf) (spack:parse (usocket:socket-stream (socket drone)))
-          (if (string= status "done")
+          do (write-byte i (usocket:socket-stream (sock drone))))
+    (force-output (usocket:socket-stream (sock drone)))
+    (if (usocket:wait-for-input (sock drone) :ready-only t)
+        (spack:destructuring-elements (status buf) (spack:parse (usocket:socket-stream (sock drone)))
+          (if (string= status "done-get")
               buf
               nil))
         nil)))
