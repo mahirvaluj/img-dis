@@ -1,5 +1,5 @@
 (defsystem "img-dis"
-    :depends-on (#:ieee-floats #:trivial-utf-8 #:cl-intbytes #:ironclad #:usocket #:bordeaux-threads #:stmx)
+    :depends-on (#:ieee-floats #:trivial-utf-8 #:cl-intbytes #:ironclad #:usocket #:bordeaux-threads)
     :author "seanptmaher@gmail.com"
     :components
     ((:module src

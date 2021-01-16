@@ -9,24 +9,6 @@
 
 
 (defvar *testing*)
-;; (defclass queue ()
-;;   ((ql :initform nil :accessor ql)
-;;    (tail :initform nil :accessor tail)))
-
-;; (defmethod enqueue (obj (q queue))
-;;   (if (null (tail q))
-;;       (setf (ql q) (list obj)
-;;             (tail q) (ql q))
-;;       (setf (cdr (tail q)) (cons obj nil)
-;;             (tail q) (cdr (tail q)))))
-
-;; (defmethod dequeue ((q queue))
-;;   (if (null (tail q))
-;;       nil
-;;       (let ((ret (pop (ql q))))
-;;         (when (null (ql q))
-;;           (setf (tail q) nil))
-;;         ret)))
 
 (defclass drone ()
   ((active :initarg :active :accessor active)
