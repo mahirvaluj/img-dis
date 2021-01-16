@@ -7,8 +7,8 @@
   
   To load the code, install SBCL, then install [[https://www.quicklisp.org/beta/][Quicklisp]], make it so
   that asdf can find the project, depending on where you cloned it [[https://common-lisp.net/project/asdf/asdf/Configuring-ASDF-to-find-your-systems.html][as
-  detailed here.]] Then, you can launch sbcl, and run ~(asdf:load-system 
-  :img-dis)~ and it will load.
+  detailed here.]] Then, you can launch sbcl, and run ~(ql:quickload :img-dis)~
+  and it will load.
 
 * API
 ** ~drone~
