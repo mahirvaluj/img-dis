@@ -1,0 +1,43 @@
+* img-dis
+  This is a content-addressible in-memory "distributed" "database".
+  
+  I say this because it's more of a proof of concept than anything
+  else. It's written mostly from scratch, and doesn't tolerate machine
+  failures, network failures, or anything else.
+  
+  To load the code, install SBCL, then install [[https://www.quicklisp.org/beta/][Quicklisp]], make it so
+  that asdf can find the project, depending on where you cloned it [[https://common-lisp.net/project/asdf/asdf/Configuring-ASDF-to-find-your-systems.html][as
+  detailed here.]] Then, you can launch sbcl, and run ~(asdf:load-system 
+  :img-dis)~ and it will load.
+
+* API
+** ~drone~
+   All the files are stored on drones. To use a drone, after loading
+   the system, type ~(in-package :drone)~
+*** ~(listener host port)~
+    Starts a socket listener on the host and port specified, and it
+    will respond to requests from commanders. 
+
+    The drone doesn't really do anything else, all the other commands
+    are only accessible through that socket by the commander.
+
+** ~commander~
+   The commander is the one who commands the drones. ~(in-package
+   :commander)~ to get access to these functions.
+
+*** ~(init)~
+    Before anything can be done, you must initialize the state.
+
+*** ~(connect-drone host port)~
+    Connects to a drone at the specified port, and 
+
+*** ~(put-img path)~
+    Upload to a drone. It'll upload the file, then return you the hash
+    of the file.
+    
+*** ~(put buf)~
+    Directly puts a binary buffer into the drones.
+
+*** ~(take hash)~
+    If you pass the hash of a file that was previously uploaded, it'll
+    return that file as a binary buffer (~(unsigned-byte 8)~).
