@@ -10,6 +10,9 @@
   detailed here.]] Then, you can launch sbcl, and run ~(ql:quickload :img-dis)~
   and it will load.
 
+* Demo
+  [[https://drive.google.com/file/d/1bHXmnM20yjEpLBhd3LU0-A_dKxJB8tX8/view?usp=sharing][Here you can see a demo of me using the application. You should probably watch it on 2x speed, though. I was a bit exhausted at the time of recording]]
+
 * API
 ** ~drone~
    All the files are stored on drones. To use a drone, after loading
